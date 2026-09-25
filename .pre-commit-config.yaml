@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: no-stripe-keys
+        name: no committed Stripe secrets
+        entry: python scripts/check_no_stripe_keys.py
+        language: system
+        pass_filenames: false

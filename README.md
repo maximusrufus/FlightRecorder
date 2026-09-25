@@ -117,6 +117,31 @@ repo** — set your own price IDs when you're ready to go live.
 `/compare/bifrost`, `/migrate/from-langfuse` — Jinja2-rendered, served by
 `flightrecorder/web.py`.
 
+## Stripe
+
+- **Key management**: `STRIPE_SECRET_KEY` should be a **restricted key**
+  (`rk_...`) scoped to only what this app needs (Checkout Sessions write,
+  Billing Portal write, Customers read, Subscriptions read, Webhook
+  Endpoints read) -- never a full secret key. In production, source it from
+  **Google Secret Manager**, not a committed `.env`. `scripts/check_no_stripe_keys.py`
+  (wired into `.pre-commit-config.yaml`) fails the build if a live/test
+  secret is ever committed.
+- **Bootstrap**: `python scripts/stripe_bootstrap.py` idempotently creates
+  one Stripe Product per tier (core, pro, business) plus their Prices, and a
+  webhook endpoint if `STRIPE_WEBHOOK_URL` is set.
+- **Webhook events subscribed** (`POST /stripe/webhook`):
+  `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`, `customer.subscription.created`,
+  `customer.subscription.updated`, `customer.subscription.deleted`,
+  `invoice.paid`, `invoice.payment_failed`. Every event is signature-verified
+  first (503 if unconfigured, 400 on failure) and idempotency-deduped by
+  event id before any plan changes.
+- **Customer Portal**: `POST /billing/portal?tenant=...` redirects a tenant
+  with a stored Stripe customer id to the Stripe-hosted Customer Portal.
+- **Tax**: enable Stripe Tax + register in each jurisdiction before charging
+  US/EU customers -- `automatic_tax` is **not** enabled by default and
+  Stripe silently collects no tax without an active registration.
+
 ## Docker
 
 ```bash

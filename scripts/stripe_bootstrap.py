@@ -34,11 +34,22 @@ API_BASE = "https://api.stripe.com/v1"
 APP_NAME = "flightrecorder"
 
 # tier -> (env var billing.py reads, unit amount in cents, "recurring" | "one_time")
-TIERS: dict[str, tuple[str, int, str]] = {"core": ("STRIPE_PRICE_CORE", 4900, "recurring"),
+TIERS: dict[str, tuple[str, int, str]] = {
+    "core": ("STRIPE_PRICE_CORE", 4900, "recurring"),
     "pro": ("STRIPE_PRICE_PRO", 14900, "recurring"),
-    "business": ("STRIPE_PRICE_BUSINESS", 29900, "recurring")}
+    "business": ("STRIPE_PRICE_BUSINESS", 29900, "recurring"),
+}
 
-WEBHOOK_EVENTS = ["checkout.session.completed"]
+WEBHOOK_EVENTS = [
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+    "invoice.paid",
+    "invoice.payment_failed",
+]
 
 
 def _basic_auth_header(api_key: str) -> str:
@@ -46,9 +57,7 @@ def _basic_auth_header(api_key: str) -> str:
     return f"Basic {token}"
 
 
-def default_request(
-    method: str, path: str, api_key: str, data: dict | None = None
-) -> dict:
+def default_request(method: str, path: str, api_key: str, data: dict | None = None) -> dict:
     """Real HTTP call to the Stripe API. Injected as `request_fn` in tests
     so the test suite never touches the network."""
     url = f"{API_BASE}{path}"
@@ -63,9 +72,7 @@ def default_request(
         with urllib.request.urlopen(req) as resp:  # noqa: S310
             return json.loads(resp.read())
     except urllib.error.HTTPError as exc:  # pragma: no cover - network path
-        raise RuntimeError(
-            f"Stripe API error {exc.code}: {exc.read().decode()}"
-        ) from exc
+        raise RuntimeError(f"Stripe API error {exc.code}: {exc.read().decode()}") from exc
 
 
 def find_product(request_fn, api_key: str, tier: str) -> dict | None:
@@ -97,21 +104,14 @@ def ensure_product(request_fn, api_key: str, tier: str) -> dict:
 def find_price(
     request_fn, api_key: str, product_id: str, amount_cents: int, recurring: bool
 ) -> dict | None:
-    resp = request_fn(
-        "GET", f"/prices?product={product_id}&limit=100&active=true", api_key
-    )
+    resp = request_fn("GET", f"/prices?product={product_id}&limit=100&active=true", api_key)
     for price in resp.get("data", []):
-        if (
-            price.get("unit_amount") == amount_cents
-            and bool(price.get("recurring")) == recurring
-        ):
+        if price.get("unit_amount") == amount_cents and bool(price.get("recurring")) == recurring:
             return price
     return None
 
 
-def ensure_price(
-    request_fn, api_key: str, product_id: str, amount_cents: int, kind: str
-) -> dict:
+def ensure_price(request_fn, api_key: str, product_id: str, amount_cents: int, kind: str) -> dict:
     recurring = kind == "recurring"
     existing = find_price(request_fn, api_key, product_id, amount_cents, recurring)
     if existing is not None:
@@ -126,9 +126,7 @@ def ensure_price(
     return request_fn("POST", "/prices", api_key, data=data)
 
 
-def bootstrap_prices(
-    request_fn, api_key: str, tiers: dict | None = None
-) -> dict[str, str]:
+def bootstrap_prices(request_fn, api_key: str, tiers: dict | None = None) -> dict[str, str]:
     """Returns {env_var: price_id} for every tier, creating nothing that
     already exists (matched via Product metadata + Price amount/recurring)."""
     tiers = tiers if tiers is not None else TIERS
@@ -148,9 +146,7 @@ def find_webhook_endpoint(request_fn, api_key: str, url: str) -> dict | None:
     return None
 
 
-def ensure_webhook_endpoint(
-    request_fn, api_key: str, url: str
-) -> tuple[dict, str | None]:
+def ensure_webhook_endpoint(request_fn, api_key: str, url: str) -> tuple[dict, str | None]:
     """Returns (endpoint, secret). secret is None when the endpoint already
     existed (Stripe never re-returns a signing secret after creation)."""
     existing = find_webhook_endpoint(request_fn, api_key, url)

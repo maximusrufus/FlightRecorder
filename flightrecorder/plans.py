@@ -97,6 +97,53 @@ class PlanStore:
             entry["plan"] = plan
             self._write(data)
 
+    def set_stripe_customer(self, tenant: str, customer_id: str) -> None:
+        with FileLock(self.path):
+            data = self._read()
+            entry = data.setdefault(tenant, {"plan": DEFAULT_PLAN, "usage": {}})
+            entry["stripe_customer_id"] = customer_id
+            self._write(data)
+
+    def set_subscription_state(
+        self, tenant: str, subscription_id: Optional[str], status: Optional[str]
+    ) -> None:
+        with FileLock(self.path):
+            data = self._read()
+            entry = data.setdefault(tenant, {"plan": DEFAULT_PLAN, "usage": {}})
+            entry["stripe_subscription_id"] = subscription_id
+            entry["subscription_status"] = status
+            self._write(data)
+
+    def get_stripe_customer_id(self, tenant: str) -> Optional[str]:
+        data = self._read()
+        return data.get(tenant, {}).get("stripe_customer_id")
+
+    def resolve_tenant_by_customer_id(self, customer_id: str) -> Optional[str]:
+        data = self._read()
+        for tenant, entry in data.items():
+            if tenant == "__stripe_events__":
+                continue
+            if entry.get("stripe_customer_id") == customer_id:
+                return tenant
+        return None
+
+    def downgrade(self, tenant: str) -> None:
+        """Used on subscription cancellation or payment failure."""
+        self.set_plan(tenant, DEFAULT_PLAN)
+
+    def mark_event_processed(self, event_id: str) -> bool:
+        """Idempotency guard for Stripe webhook events, stored in the same
+        JSON file under a reserved `__stripe_events__` key. Returns True the
+        first time an event id is seen, False on any repeat delivery."""
+        with FileLock(self.path):
+            data = self._read()
+            seen = data.setdefault("__stripe_events__", [])
+            if event_id in seen:
+                return False
+            seen.append(event_id)
+            self._write(data)
+            return True
+
     def usage_this_month(self, tenant: str) -> int:
         data = self._read()
         month = _month_key()
