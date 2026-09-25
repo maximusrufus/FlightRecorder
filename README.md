@@ -172,4 +172,4 @@ Apache-2.0 — see `LICENSE`.
 
 ## Live staging
 
-https://flightrecorder-771787148187.us-central1.run.app (Cloud Run, us-central1, min-instances 0; ephemeral storage until a volume or Postgres is configured; Stripe not yet configured).
+https://flightrecorder-udrj5akpma-uc.a.run.app (Cloud Run, us-central1, project ripplarity-products (Ripplarity Inc), min-instances 0; ephemeral storage until a volume or Postgres is configured; Stripe not yet configured).
