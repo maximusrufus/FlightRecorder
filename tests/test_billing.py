@@ -65,16 +65,16 @@ def _install_fake_stripe_module(monkeypatch):
         def __init__(self, calls):
             self.calls = calls
 
-        def create(self, **kwargs):
-            self.calls.append(kwargs)
+        def create(self, params=None, options=None):
+            self.calls.append(dict(params or {}))
             return _FakeCheckoutSession()
 
     class _PortalSessionsService:
         def __init__(self, calls):
             self.calls = calls
 
-        def create(self, **kwargs):
-            self.calls.append(kwargs)
+        def create(self, params=None, options=None):
+            self.calls.append(dict(params or {}))
             return _FakePortalSession()
 
     class _V1:

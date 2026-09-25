@@ -100,7 +100,7 @@ def create_checkout_session(
             params["client_reference_id"] = tenant
         if customer_email:
             params["customer_email"] = customer_email
-        session = client.v1.checkout.sessions.create(**params)
+        session = client.v1.checkout.sessions.create(params)
         return {"mode": "stripe", "url": session.url}
 
     if payment_link_configured():
@@ -138,8 +138,10 @@ def billing_portal(request: Request) -> JSONResponse | RedirectResponse:
     client = get_client()
     base = str(request.base_url).rstrip("/")
     session = client.v1.billing_portal.sessions.create(
-        customer=customer_id,
-        return_url=f"{base}/billing/portal-return",
+        {
+            "customer": customer_id,
+            "return_url": f"{base}/billing/portal-return",
+        }
     )
     return RedirectResponse(session.url, status_code=303)
 
