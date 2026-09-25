@@ -4,12 +4,12 @@ scratch.
 Provenance
 ----------
 Vendored near-verbatim (2026-09-13) from
-``HealthShield/Backend/services/verify/rfc3161_min.py`` into this
+an internal RFC 3161 helper into this
 standalone FlightRecorder repo, for `flightrecorder/anchor.py`'s periodic
 chain-head anchoring. That file was itself vendored from
-``ClockRegistry/rfc3161_min.py``, from
-``CourtBacklogAI/Backend/core/rfc3161_client.py``, from
-``HealthShield/Backend/services/moat/timeanchor/rfc3161.py``. This file
+an internal stdlib-only RFC 3161 module, from
+an internal RFC 3161 client, from
+an internal timestamp-anchor module. This file
 keeps the already-trimmed, stdlib-only shape:
   * ``build_timestamp_request`` -- DER-encode a TimeStampReq.
   * ``parse_timestamp_response`` -- parse a TimeStampResp far enough to read
@@ -19,10 +19,10 @@ keeps the already-trimmed, stdlib-only shape:
   * ``verify_timestamp_token`` -- messageImprint-match-only verification
     (no certificate-chain / signature check).
 
-Chosen over HealthShield's untrimmed module because that one's full
+Chosen over the untrimmed internal module because that one's full
 CMS-signature + certificate-chain verification path (``_verify_cms_signature``,
 ``require_signature=True``) needs the third-party ``asn1crypto`` + ``certifi``
-+ ``cryptography`` packages, and ClockRegistry is stdlib-only by design (see
++ ``cryptography`` packages, and this module is stdlib-only by design (see
 its README). This vendor drops that block and keeps only the pieces that
 build on stdlib (``hashlib``, ``secrets``, ``urllib``) alone.
 
@@ -44,7 +44,7 @@ chain verification step:
     the token's messageImprint matches the digest that was anchored -- it
     does NOT confirm the token was genuinely issued by the named TSA. Full
     cryptographic authentication requires either the untrimmed
-    HealthShield module (needs ``asn1crypto``) or an external check
+    untrimmed internal module (needs ``asn1crypto``) or an external check
     (``openssl ts -verify``).
   * It does NOT, by itself, carry evidentiary weight in a legal proceeding
     on its own; that requires a qualified certification pointing at this
@@ -543,7 +543,7 @@ def verify_timestamp_token(token_der: bytes, digest: bytes) -> dict:
     dropped from this trimmed vendor -- see module docstring). A `True`
     result proves the token's imprint matches the digest that was sent;
     it does NOT prove TSA authorship. For full cryptographic
-    authentication, use the untrimmed HealthShield module (needs
+    authentication, use the untrimmed untrimmed internal module (needs
     `asn1crypto`) or run `openssl ts -verify` against the TSA's published
     certificate.
     """

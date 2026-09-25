@@ -1,6 +1,6 @@
 """Periodic anchoring of ledger chain heads.
 
-Adapted from HealthShield's `services/warrant/anchor.py`: the Merkle-tree
+Adapted from an internal Merkle anchoring module: the Merkle-tree
 folding logic is a direct, trimmed port (OpenTimestamps/Bitcoin path
 dropped — not needed for a broker-dealer examiner audit trail); the
 RFC 3161 TSA client is `rfc3161_min.py` (vendored separately, see that

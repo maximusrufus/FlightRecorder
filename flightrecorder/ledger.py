@@ -1,8 +1,8 @@
 """Append-only, tamper-evident JSONL ledger for AI-agent activity records.
 
-Adapted from HealthShield's `services/recover/_trust_receipt_ledger.jsonl`
+Adapted from an internal hash-chained receipt ledger
 design (hash-chained, one fsync'd line per record, never rewritten) and
-EventLedgerKit's `store/hashchain.py` (hash-over-stored-body so crypto-shred
+an internal hash-chain store (hash-over-stored-body so crypto-shred
 keeps the chain verifiable after a subject key is destroyed).
 
 Record shape (one JSON object per line):
