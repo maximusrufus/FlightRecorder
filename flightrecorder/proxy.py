@@ -60,6 +60,12 @@ crypto._private_key()
 
 app = FastAPI(title="FlightRecorder", version="0.2.0")
 
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
 _ledger: Optional[ledger_mod.Ledger] = None
 _anchors: Optional[anchor_mod.AnchorStore] = None
 _keystore: Optional[KeyStore] = None

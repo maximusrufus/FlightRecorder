@@ -174,6 +174,8 @@ Apache-2.0 — see `LICENSE`.
 
 https://flightrecorder-udrj5akpma-uc.a.run.app (Cloud Run, us-central1, project ripplarity-products (Ripplarity Inc), min-instances 0; ephemeral storage until a volume or Postgres is configured; Stripe not yet configured). This hosted preview shows a banner (see "Durable storage" below) and is not yet suitable for real audit data.
 
+Liveness path is `GET /health`, returning `{"status": "ok"}`; point uptime monitors and Cloud Run health checks there.
+
 ## Durable storage
 
 The hosted preview above writes to container-local disk (`FLIGHTRECORDER_DATA_DIR`,
