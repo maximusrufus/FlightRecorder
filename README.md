@@ -20,7 +20,7 @@ custody.
   checkpoints + the tenant's public key + `MAPPING.md` (field mapping to EU
   AI Act Art. 12, ISO/IEC 42001, FINRA 17a-4(f), SOC 2 CC7) into one zip.
 - **Optional policy gate** — `flightrecorder.policy.Policy` (ported from
-  ActionFirewall) can evaluate allow/hold/block decisions and record the
+  an internal module) can evaluate allow/hold/block decisions and record the
   verdict into the ledger before an action runs.
 
 ## Quickstart (SDK, self-host, zero network calls)
@@ -138,7 +138,7 @@ ruff check .
 See `flightrecorder/mapping.py` (also embedded in every export bundle as
 `MAPPING.md`) for how record fields map to EU AI Act Art. 12, ISO/IEC 42001,
 FINRA 17a-4(f), and SOC 2 CC7. See `PROVENANCE.md` for exactly which files
-in this repo were copied from `AgentRecord`/`ActionFirewall` and what
+in this repo were copied from an internal module/an internal module and what
 changed.
 
 ## License
