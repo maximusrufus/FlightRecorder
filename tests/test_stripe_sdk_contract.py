@@ -60,3 +60,18 @@ def test_fake_portal_sessions_create_rejects_kwargs(monkeypatch):
     client = fake.StripeClient("sk_test")
     with pytest.raises(TypeError):
         client.v1.billing_portal.sessions.create(customer="cus_1")
+
+
+def test_real_sdk_event_does_not_support_dict_get():
+    """Pins the reason `_verify_stripe_signature` normalizes to a plain
+    dict: `stripe.Webhook.construct_event` returns a `stripe.Event` (a
+    StripeObject), and calling `.get(...)` on one raises AttributeError --
+    this is the exact production 500 this normalization exists to fix."""
+    import stripe
+
+    event = stripe.Event.construct_from(
+        {"id": "evt_1", "type": "checkout.session.completed", "data": {"object": {}}},
+        key=None,
+    )
+    with pytest.raises(AttributeError):
+        event.get("id")

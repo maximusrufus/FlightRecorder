@@ -147,13 +147,27 @@ def billing_portal(request: Request) -> JSONResponse | RedirectResponse:
 
 
 def _verify_stripe_signature(payload: bytes, sig_header: Optional[str]) -> dict[str, Any]:
+    """Verify the Stripe signature and return a plain, fully-nested `dict`
+    -- never a `stripe.Event` (a StripeObject). `stripe.Webhook.construct_event`
+    returns a StripeObject, which does not support `.get(...)`
+    ("'get' is a dict method, but a Event is not a dict"); every downstream
+    handler in this module uses `.get`. `construct_event` is used purely as
+    the signature-verification gate here; once it confirms the payload is
+    authentic we re-parse the same raw bytes Stripe signed with
+    `json.loads`, giving plain dicts all the way down (including nested
+    `data.object`), rather than a shallow `.to_dict()`."""
+    import json  # lazy import
+
     import stripe  # lazy import
 
     secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     if not secret:
         raise HTTPException(503, "STRIPE_WEBHOOK_SECRET not configured")
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, secret)
+        stripe.Webhook.construct_event(payload, sig_header, secret)
+        event: dict[str, Any] = json.loads(payload)
+    except HTTPException:
+        raise
     except Exception as exc:  # invalid payload or signature
         raise HTTPException(400, f"invalid webhook signature: {exc}") from exc
     return event

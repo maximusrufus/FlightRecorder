@@ -99,11 +99,18 @@ def _install_fake_stripe_module(monkeypatch):
     class _FakeWebhook:
         @staticmethod
         def construct_event(payload, sig_header, secret):
+            """Mirrors the real SDK: returns a genuine `stripe.Event` (a
+            StripeObject, not a dict), built from `payload` via
+            `stripe.Event.construct_from` -- so tests exercise the same
+            downstream normalization production traffic requires."""
             import json
 
-            return json.loads(payload)
+            import stripe as real_stripe
+
+            return real_stripe.Event.construct_from(json.loads(payload), key=None)
 
     fake.Webhook = _FakeWebhook
+    fake.Event = __import__("stripe").Event
     monkeypatch.setitem(sys.modules, "stripe", fake)
     return fake
 
