@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flightrecorder"
+version = "0.1.0"
+description = "Tamper-evident, cryptographically signed, regulator-exportable audit trail for AI agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Flight Recorder" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.5",
+    "cryptography>=42.0",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+billing = ["stripe>=9.0"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
+
+[project.scripts]
+flightrecorder = "flightrecorder.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["flightrecorder*"]
+
+[tool.setuptools.package-data]
+flightrecorder = ["templates/*.html"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

@@ -1,0 +1,12 @@
+services:
+  flightrecorder:
+    build: .
+    ports:
+      - "8015:8015"
+    env_file:
+      - .env
+    volumes:
+      - flightrecorder_data:/app/data
+
+volumes:
+  flightrecorder_data:

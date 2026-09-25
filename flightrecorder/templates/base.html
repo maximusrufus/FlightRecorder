@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Flight Recorder{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, Segoe UI, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; color: #1a1a2e; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    nav a { margin-left: 1rem; color: #1a1a2e; text-decoration: none; }
+    table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+    th, td { border: 1px solid #ddd; padding: 0.6rem; text-align: left; }
+    th { background: #f4f4f8; }
+    .plan { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 0.5rem 0; }
+    footer { margin-top: 3rem; color: #666; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Flight Recorder</strong>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/compare/langfuse">vs Langfuse</a>
+      <a href="/compare/helicone">vs Helicone</a>
+      <a href="/compare/bifrost">vs Bifrost</a>
+      <a href="/migrate/from-langfuse">Migrate</a>
+    </nav>
+  </header>
+  {% block content %}{% endblock %}
+  <footer>Flight Recorder — evidence-grade audit trails for AI agents. Apache-2.0 self-host, or hosted.</footer>
+</body>
+</html>

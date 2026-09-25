@@ -1,0 +1,13 @@
+.venv/
+.venv_fresh/
+__pycache__/
+*.pyc
+*.egg-info/
+data/
+demo_tmp/
+.pytest_cache/
+.ruff_cache/
+*.jsonl
+!tests/**/*.jsonl
+dist/
+build/

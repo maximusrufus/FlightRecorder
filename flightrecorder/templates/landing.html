@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Flight Recorder — evidence-grade audit trails for AI agents{% endblock %}
+{% block content %}
+<h1>Evidence-grade, not just observability.</h1>
+<p>
+  Flight Recorder is a tamper-evident, cryptographically signed, hash-chained
+  audit trail for AI agent activity — prompts, outputs, tool calls — built to
+  survive an examiner's or regulator's scrutiny, not just a dashboard.
+</p>
+<p>
+  Unlike LLM-observability dashboards (Langfuse, Helicone, Bifrost), every
+  record is Ed25519-signed and chained to the one before it, checkpointed
+  independently, and exportable as a self-contained regulator pack mapped to
+  EU AI Act Article 12, ISO/IEC 42001, FINRA Rule 17a-4(f), and SOC 2 CC7.
+</p>
+
+<h2>Pricing</h2>
+<table>
+  <tr><th>Plan</th><th>Price</th><th>Limit</th></tr>
+  {% for tier in pricing %}
+  <tr>
+    <td>{{ tier.name }}</td>
+    <td>{{ tier.price }}{{ tier.period }}</td>
+    <td>{{ tier.limit }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p>
+  {% if stripe %}
+  <a href="/billing/checkout/core">Start Core</a> ·
+  <a href="/billing/checkout/pro">Start Pro</a> ·
+  <a href="/billing/checkout/business">Start Business</a>
+  {% else %}
+  Checkout is not yet configured in this deployment.
+  {% endif %}
+</p>
+
+<h2>Open source</h2>
+<p>The core ledger, signing, and verifier are Apache-2.0 and self-hostable — no lock-in.</p>
+{% endblock %}

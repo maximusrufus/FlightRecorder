@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Flight Recorder vs {{ competitor.name }}{% endblock %}
+{% block content %}
+<h1>Flight Recorder vs {{ competitor.name }}</h1>
+<p><strong>{{ competitor.name }}</strong>: {{ competitor.positioning }}</p>
+<table>
+  <tr><th>Tier</th><th>Price</th></tr>
+  {% for name, price in competitor.tiers %}
+  <tr><td>{{ name }}</td><td>{{ price }}</td></tr>
+  {% endfor %}
+</table>
+<h2>The gap</h2>
+<p>{{ competitor.gap }}</p>
+<p><em>Prices shown are the competitor's own published rates as of this build; verify current pricing on their site before quoting.</em></p>
+{% endblock %}

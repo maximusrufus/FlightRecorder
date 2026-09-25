@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Migrate from Langfuse to Flight Recorder{% endblock %}
+{% block content %}
+<h1>Migrating from Langfuse</h1>
+<ol>
+  <li>Keep Langfuse for tracing/debugging if you like it — Flight Recorder is not a tracing
+      replacement, it's an evidence layer that can run alongside it.</li>
+  <li>Wrap your OpenAI-compatible client with <code>flightrecorder.Recorder().wrap_openai(client)</code>
+      instead of (or in addition to) Langfuse's callback handler.</li>
+  <li>Langfuse traces are mutable JSON in a Postgres table; Flight Recorder records are
+      appended to a hash-chained, Ed25519-signed ledger that a `flightrecorder verify` run
+      can prove was never altered.</li>
+  <li>When you need to hand something to an examiner or auditor, use
+      <code>GET /v1/export</code> for a self-contained regulator pack (records + signed
+      checkpoints + public key + MAPPING.md) instead of a database dump.</li>
+</ol>
+<p>See the SDK README for the full <code>Recorder</code> API.</p>
+{% endblock %}
