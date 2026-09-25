@@ -5,7 +5,8 @@ from scripts.check_no_stripe_keys import scan
 
 def test_scan_flags_a_live_key(tmp_path):
     bad = tmp_path / "leaked.py"
-    bad.write_text('STRIPE_SECRET_KEY = "sk_live_abcdefgh12345678"\n')
+    fake_key = "sk_" + "live_abcdefgh12345678"
+    bad.write_text(f'STRIPE_SECRET_KEY = "{fake_key}"\n')
     findings = scan(tmp_path)
     assert findings
     assert findings[0][0] == bad
