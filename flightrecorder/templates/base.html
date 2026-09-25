@@ -13,9 +13,18 @@
     th { background: #f4f4f8; }
     .plan { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 0.5rem 0; }
     footer { margin-top: 3rem; color: #666; font-size: 0.85rem; }
+    .preview-banner { background: #fff3cd; border: 1px solid #f0ad4e; color: #7a5b00; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1.5rem; font-size: 0.9rem; }
   </style>
 </head>
 <body>
+  {% if preview_mode() %}
+  <div class="preview-banner" data-testid="preview-banner">
+    Preview deployment. This hosted instance does not yet persist data across
+    restarts or redeploys and may be reset without notice. Self-hosting with
+    a mounted volume (<code>FLIGHTRECORDER_DATA_DIR</code>) is durable. Do
+    not enter real customer, patient, or payment information.
+  </div>
+  {% endif %}
   <header>
     <strong>Flight Recorder</strong>
     <nav>

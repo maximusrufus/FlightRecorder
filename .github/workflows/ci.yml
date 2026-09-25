@@ -21,3 +21,5 @@ jobs:
         run: ruff check .
       - name: Pytest
         run: pytest -q
+      - name: Check no committed Stripe keys
+        run: python scripts/check_no_stripe_keys.py

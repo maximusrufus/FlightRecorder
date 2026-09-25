@@ -4,6 +4,7 @@ comparisons + a migration guide. Mounted onto the main FastAPI app in
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -17,6 +18,15 @@ router = APIRouter()
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+def preview_mode_enabled() -> bool:
+    """Default ON: shows a banner unless explicitly disabled with
+    PREVIEW_MODE=0 once durable storage is attached."""
+    return os.getenv("PREVIEW_MODE", "1") != "0"
+
+
+templates.env.globals["preview_mode"] = preview_mode_enabled
 
 PRICING = [
     {
@@ -100,17 +110,23 @@ def landing(request: Request) -> HTMLResponse:
 
 @router.get("/compare/langfuse", response_class=HTMLResponse)
 def compare_langfuse(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "compare.html", {"competitor": COMPETITORS["langfuse"]})
+    return templates.TemplateResponse(
+        request, "compare.html", {"competitor": COMPETITORS["langfuse"]}
+    )
 
 
 @router.get("/compare/helicone", response_class=HTMLResponse)
 def compare_helicone(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "compare.html", {"competitor": COMPETITORS["helicone"]})
+    return templates.TemplateResponse(
+        request, "compare.html", {"competitor": COMPETITORS["helicone"]}
+    )
 
 
 @router.get("/compare/bifrost", response_class=HTMLResponse)
 def compare_bifrost(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "compare.html", {"competitor": COMPETITORS["bifrost"]})
+    return templates.TemplateResponse(
+        request, "compare.html", {"competitor": COMPETITORS["bifrost"]}
+    )
 
 
 @router.get("/migrate/from-langfuse", response_class=HTMLResponse)

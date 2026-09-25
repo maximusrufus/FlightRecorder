@@ -172,4 +172,30 @@ Apache-2.0 — see `LICENSE`.
 
 ## Live staging
 
-https://flightrecorder-udrj5akpma-uc.a.run.app (Cloud Run, us-central1, project ripplarity-products (Ripplarity Inc), min-instances 0; ephemeral storage until a volume or Postgres is configured; Stripe not yet configured).
+https://flightrecorder-udrj5akpma-uc.a.run.app (Cloud Run, us-central1, project ripplarity-products (Ripplarity Inc), min-instances 0; ephemeral storage until a volume or Postgres is configured; Stripe not yet configured). This hosted preview shows a banner (see "Durable storage" below) and is not yet suitable for real audit data.
+
+## Durable storage
+
+The hosted preview above writes to container-local disk (`FLIGHTRECORDER_DATA_DIR`,
+default `./data`) on a Cloud Run service with `--min-instances 0` — that storage
+does **not** survive a scale-to-zero or redeploy. The ledger's whole value
+proposition is durability, so treat the hosted preview as a demo only until
+one of these is attached:
+
+- **Self-host with a mounted volume** (simplest, works today, no code change):
+  ```bash
+  gcloud run services update flightrecorder \
+    --region us-central1 \
+    --add-volume name=fr-data,type=cloud-storage,bucket=YOUR_BUCKET \
+    --add-volume-mount volume=fr-data,mount-path=/data \
+    --set-env-vars FLIGHTRECORDER_DATA_DIR=/data
+  ```
+  (or a Filestore/Cloud SQL-backed persistent disk via `--add-volume type=nfs`,
+  same shape). This makes `FLIGHTRECORDER_DATA_DIR` point at storage that
+  outlives the container.
+- **Local / on-prem self-host**: run `uvicorn flightrecorder.app:app` with
+  `FLIGHTRECORDER_DATA_DIR` pointed at a mounted disk you control — the
+  ledger, checkpoints, and keys all live under that one directory.
+
+Once durable storage is attached, set `PREVIEW_MODE=0` to remove the preview
+banner from the landing/marketing pages.
