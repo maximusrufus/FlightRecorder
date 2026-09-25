@@ -1,32 +1,32 @@
 # Flight Recorder
 
-Evidence-grade, not just observability. Flight Recorder is a tamper-evident,
-cryptographically signed, regulator-exportable audit trail for AI agents —
-positioned against LLM-observability dashboards (Langfuse, Helicone,
-Bifrost), which trace and debug but don't produce a defensible chain of
-custody.
+Flight Recorder is a tamper-evident, cryptographically signed audit trail
+for AI agents.
 
-- **Hash-chained, Ed25519-signed ledger** — one fsync'd JSONL line per
-  record, cross-process file-locked, never rewritten (`flightrecorder/ledger.py`).
-- **Crypto-shred** — per-subject data keys wrapped by a KEK; destroying a
-  subject's key makes its payloads permanently unreadable while the chain
-  still verifies (`flightrecorder/crypto.py`).
-- **Signed checkpoints** — periodic witness snapshots catch tail truncation
-  a pure hash chain can't (`flightrecorder/checkpoint.py`).
-- **Offline verifier** — `flightrecorder verify <ledger|export.zip|url>`
-  requires an out-of-band trusted key for signature checks and never trusts
-  a key bundled in the artifact it's verifying.
-- **Regulator export pack** — `GET /v1/export` bundles records + signed
-  checkpoints + the tenant's public key + `MAPPING.md` (field mapping to EU
-  AI Act Art. 12, ISO/IEC 42001, FINRA 17a-4(f), SOC 2 CC7) into one zip.
-- **Optional policy gate** — `flightrecorder.policy.Policy` (ported from
-  an internal module) can evaluate allow/hold/block decisions and record the
-  verdict into the ledger before an action runs.
+What it does that LLM-observability dashboards (Langfuse, Helicone,
+Bifrost) don't: every record is Ed25519-signed and hash-chained to the one
+before it (`flightrecorder/ledger.py`), independently checkpointed
+(`flightrecorder/checkpoint.py`), verifiable **offline** against an
+out-of-band trusted key (`flightrecorder verify`, never trusting a key
+bundled in the artifact it's checking — `flightrecorder/verify_cli.py`),
+and exportable as a self-contained regulator pack whose `MAPPING.md`
+cross-references every ledger field to EU AI Act Article 12, ISO/IEC
+42001, FINRA Rule 17a-4(f), and SOC 2 CC7 (`flightrecorder/mapping.py` —
+a documented field cross-reference, not a legal compliance certification).
+Those dashboards trace and debug LLM calls; none of them ship a signed
+hash chain, an offline verifier, or a regulator export.
 
-## Quickstart (SDK, self-host, zero network calls)
+## 60-second quickstart
 
 ```bash
 pip install -e .
+```
+
+```bash
+# The SDK refuses to run without a real key-encryption-key (production
+# requires one — see "Hosted service" below). For a local trial, opt into
+# throwaway dev keys explicitly:
+export FLIGHTRECORDER_DEV=1   # PowerShell: $env:FLIGHTRECORDER_DEV = "1"
 ```
 
 ```python
@@ -54,7 +54,42 @@ Verify the chain offline:
 flightrecorder verify ./flightrecorder_ledger.jsonl
 # OK: chain intact (N records)   -> exit 0
 # TAMPERED: ...                  -> exit 2
+
+# If `flightrecorder` isn't on PATH (common with a user-scope pip install),
+# the same entry point is always reachable as a module:
+python -m flightrecorder.cli verify ./flightrecorder_ledger.jsonl
 ```
+
+## Pricing
+
+Self-host free (Apache-2.0, 10,000 records/mo built-in limit, no
+external calls required). Hosted tiers: Core $49/mo, Pro $149/mo,
+Business $299/mo — all hosted tiers are unlimited seats, priced on
+record volume, not head count. Full breakdown in "Plan limits" below.
+
+## How this differs from Langfuse and Helicone
+
+Both are good, widely-used tools — they are just solving a different
+problem than Flight Recorder.
+
+- **Pick Langfuse or Helicone if** you want LLM observability: traces,
+  prompt/eval debugging, cost and latency dashboards, a gateway with
+  caching. Neither product's job is to survive a regulator or opposing
+  counsel asking "prove this log wasn't edited after the fact" — that
+  isn't a knock on them, it's just not what they're built for, and their
+  UIs (dashboards, prompt playgrounds, eval scoring) are more pleasant
+  for day-to-day debugging than anything in this repo.
+- **Pick Flight Recorder if** the requirement is chain-of-custody: a
+  hash-chained, Ed25519-signed ledger an offline verifier can check
+  without trusting the server that produced it, crypto-shred for
+  per-subject erasure, and a regulator export pack mapped to named
+  frameworks (EU AI Act Art. 12 / ISO 42001 / FINRA 17a-4(f) / SOC 2
+  CC7). It does not do tracing UI, prompt evaluation, or gateway caching
+  — many teams run it alongside Langfuse or Helicone rather than instead
+  of them (see `docs/migrating-from-langfuse.md`).
+
+Full breakdowns: `docs/flightrecorder-vs-langfuse.md`,
+`docs/flightrecorder-vs-helicone.md`, `docs/flightrecorder-vs-bifrost.md`.
 
 ## Hosted service
 
