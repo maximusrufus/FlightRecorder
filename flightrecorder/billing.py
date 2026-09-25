@@ -37,6 +37,15 @@ router = APIRouter()
 
 APP_NAME = "flightrecorder"
 
+# Stripe's shortened statement descriptor is `RIPPL* ` (7 chars) + suffix,
+# capped at 22 chars total -- leaving 15 chars for this suffix. Every plan
+# here is mode="subscription" (see create_checkout_session below), and
+# subscription invoices read their descriptor from the Product's own
+# `statement_descriptor` field, not from anything set per-session -- so the
+# authoritative value lives in scripts/stripe_bootstrap.py, which sets this
+# same constant on the Product (idempotently, updating existing products too).
+STATEMENT_DESCRIPTOR_SUFFIX = "FLIGHTRECORDER"
+
 PLAN_PRICE_ENV = {
     "core": "STRIPE_PRICE_CORE",
     "pro": "STRIPE_PRICE_PRO",

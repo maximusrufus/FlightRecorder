@@ -128,6 +128,30 @@ def test_checkout_stripe_configured_returns_stripe_session_url(app, monkeypatch)
     assert resp.headers["location"] == "https://checkout.stripe.com/fake-session"
 
 
+def test_statement_descriptor_suffix_fits_stripe_budget():
+    suffix = billing.STATEMENT_DESCRIPTOR_SUFFIX
+    assert len(suffix) <= 15
+    assert all(c.isalnum() or c == " " for c in suffix)
+    assert not any(c in suffix for c in "<>\\'\"*")
+
+
+def test_checkout_subscription_omits_payment_intent_data(app, monkeypatch):
+    """Every flightrecorder plan is mode='subscription'; Stripe rejects
+    `payment_intent_data` on a subscription-mode Checkout Session, so the
+    statement descriptor must come from the Product, not the session."""
+    fake = _install_fake_stripe_module(monkeypatch)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")
+    monkeypatch.setenv("STRIPE_PRICE_CORE", "price_core_fake")
+    monkeypatch.setenv("STRIPE_PRICE_PRO", "price_pro_fake")
+    monkeypatch.setenv("STRIPE_PRICE_BUSINESS", "price_business_fake")
+
+    client = TestClient(app)
+    client.post("/billing/checkout/core", follow_redirects=False)
+    call = fake.StripeClient.instances[-1].checkout_calls[0]
+    assert call["mode"] == "subscription"
+    assert "payment_intent_data" not in call
+
+
 def test_webhook_missing_secret_returns_503(app, monkeypatch):
     _install_fake_stripe_module(monkeypatch)
     monkeypatch.delenv("STRIPE_WEBHOOK_SECRET", raising=False)

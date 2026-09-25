@@ -24,9 +24,7 @@ class FakeStripe:
     def _next_id(self, prefix: str) -> str:
         return f"{prefix}_{next(self._id_counter)}"
 
-    def __call__(
-        self, method: str, path: str, api_key: str, data: dict | None = None
-    ) -> dict:
+    def __call__(self, method: str, path: str, api_key: str, data: dict | None = None) -> dict:
         assert api_key == "sk_test_fake"
         self.calls.append((method, path))
         base_path = path.split("?")[0]
@@ -41,9 +39,17 @@ class FakeStripe:
                     "app": data["metadata[app]"],
                     "tier": data["metadata[tier]"],
                 },
+                "statement_descriptor": data.get("statement_descriptor"),
             }
             self.products.append(product)
             return product
+        if method == "POST" and base_path.startswith("/products/"):
+            product_id = base_path.split("/products/")[1]
+            for product in self.products:
+                if product["id"] == product_id:
+                    product["statement_descriptor"] = data["statement_descriptor"]
+                    return product
+            raise AssertionError(f"unknown product {product_id}")
 
         if method == "GET" and base_path == "/prices":
             product_id = path.split("product=")[1].split("&")[0]
@@ -139,3 +145,29 @@ def test_main_prints_webhook_secret_when_url_given(monkeypatch, capsys, fake):
     assert rc == 0
     out = capsys.readouterr().out
     assert "STRIPE_WEBHOOK_SECRET=whsec_" in out
+
+
+def test_statement_descriptor_suffix_fits_stripe_budget():
+    suffix = sb.STATEMENT_DESCRIPTOR_SUFFIX
+    assert len(suffix) <= 15
+    assert all(c.isalnum() or c == " " for c in suffix)
+    assert not any(c in suffix for c in "<>\\'\"*")
+
+
+def test_bootstrap_sets_statement_descriptor_on_created_products(fake):
+    sb.bootstrap_prices(fake, "sk_test_fake")
+    for product in fake.products:
+        assert product["statement_descriptor"] == sb.STATEMENT_DESCRIPTOR_SUFFIX
+
+
+def test_bootstrap_second_run_does_not_duplicate_products_and_stays_correct(fake):
+    sb.bootstrap_prices(fake, "sk_test_fake")
+    count_after_first = len(fake.products)
+
+    for product in fake.products:
+        product["statement_descriptor"] = None
+
+    sb.bootstrap_prices(fake, "sk_test_fake")
+    assert len(fake.products) == count_after_first
+    for product in fake.products:
+        assert product["statement_descriptor"] == sb.STATEMENT_DESCRIPTOR_SUFFIX

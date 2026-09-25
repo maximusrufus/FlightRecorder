@@ -33,6 +33,14 @@ API_BASE = "https://api.stripe.com/v1"
 
 APP_NAME = "flightrecorder"
 
+# Stripe's shortened statement descriptor is `RIPPL* ` (7 chars) + suffix,
+# capped at 22 chars total -- leaving 15 chars for this suffix. Every
+# flightrecorder tier is a subscription (mode="subscription"), and a
+# subscription-mode Checkout Session does not accept `payment_intent_data`,
+# so this can only be set on the Product's own `statement_descriptor` field
+# (which is what subscription invoices read).
+STATEMENT_DESCRIPTOR_SUFFIX = "FLIGHTRECORDER"
+
 # tier -> (env var billing.py reads, unit amount in cents, "recurring" | "one_time")
 TIERS: dict[str, tuple[str, int, str]] = {
     "core": ("STRIPE_PRICE_CORE", 4900, "recurring"),
@@ -87,6 +95,13 @@ def find_product(request_fn, api_key: str, tier: str) -> dict | None:
 def ensure_product(request_fn, api_key: str, tier: str) -> dict:
     existing = find_product(request_fn, api_key, tier)
     if existing is not None:
+        if existing.get("statement_descriptor") != STATEMENT_DESCRIPTOR_SUFFIX:
+            return request_fn(
+                "POST",
+                f"/products/{existing['id']}",
+                api_key,
+                data={"statement_descriptor": STATEMENT_DESCRIPTOR_SUFFIX},
+            )
         return existing
     name = f"{APP_NAME} - {tier}"
     return request_fn(
@@ -97,6 +112,7 @@ def ensure_product(request_fn, api_key: str, tier: str) -> dict:
             "name": name,
             "metadata[app]": APP_NAME,
             "metadata[tier]": tier,
+            "statement_descriptor": STATEMENT_DESCRIPTOR_SUFFIX,
         },
     )
 
