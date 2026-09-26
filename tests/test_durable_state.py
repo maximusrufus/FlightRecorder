@@ -235,3 +235,42 @@ def test_inactive_when_bucket_unset_no_upload_no_import(tmp_path, monkeypatch):
         payload=b"hi",
     )
     assert len(list(led.read_all())) == 1
+
+
+def test_witness_write_persists_when_inside_the_durable_root(monkeypatch, tmp_path):
+    """The witness detects ledger truncation, so losing it defeats its purpose."""
+    from flightrecorder import durable
+    from flightrecorder.checkpoint import Checkpoint, CheckpointWitness
+
+    uploads = []
+    monkeypatch.setenv("FLIGHTRECORDER_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(durable, "is_active", lambda: True)
+    monkeypatch.setattr(durable, "persist", lambda root: uploads.append(root))
+
+    w = CheckpointWitness(tmp_path / "witness")
+    w.write(Checkpoint(tenant="t1", seq=1, head_hash="a" * 64, ts="2026-01-01T00:00:00Z", dev_mode=True))
+    assert uploads, "a witness write inside the durable root must snapshot"
+
+
+def test_witness_write_outside_the_root_warns_and_does_not_clobber(monkeypatch, tmp_path, caplog):
+    """Snapshotting a directory that is NOT the durable root would overwrite the
+    shared object with the wrong tree. Refuse, and make the gap visible."""
+    import logging
+
+    from flightrecorder import checkpoint as checkpoint_mod
+    from flightrecorder import durable
+    from flightrecorder.checkpoint import Checkpoint, CheckpointWitness
+
+    uploads = []
+    monkeypatch.setenv("FLIGHTRECORDER_DATA_DIR", str(tmp_path / "data"))
+    (tmp_path / "data").mkdir()
+    monkeypatch.setattr(durable, "is_active", lambda: True)
+    monkeypatch.setattr(durable, "persist", lambda root: uploads.append(root))
+    monkeypatch.setattr(checkpoint_mod, "_WARNED_WITNESS_OUTSIDE_ROOT", False)
+
+    w = CheckpointWitness(tmp_path / "elsewhere")
+    with caplog.at_level(logging.ERROR):
+        w.write(Checkpoint(tenant="t1", seq=1, head_hash="b" * 64, ts="2026-01-01T00:00:00Z", dev_mode=True))
+
+    assert uploads == [], "must not snapshot a directory that is not the durable root"
+    assert any("outside the durable root" in r.message for r in caplog.records)

@@ -78,6 +78,12 @@ def gcs_object_name() -> str:
     return os.environ.get("FLIGHTRECORDER_GCS_OBJECT", "state.tar.gz")
 
 
+def data_root() -> str:
+    """The directory this module snapshots. Single source of truth so callers
+    outside proxy.py do not re-derive it and drift."""
+    return os.getenv("FLIGHTRECORDER_DATA_DIR", "./data")
+
+
 def is_active() -> bool:
     return bool(gcs_bucket_name())
 

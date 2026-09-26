@@ -20,6 +20,7 @@ S3-with-Object-Lock (write-once) is a drop-in replacement — see the
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -87,6 +88,9 @@ class Checkpoint:
         )
 
 
+_WARNED_WITNESS_OUTSIDE_ROOT = False
+
+
 class CheckpointWitness:
     """Local-file witness store: one JSONL file per tenant, append-only,
     fsync'd. Interface intentionally narrow (`write`, `read_all`) so an
@@ -107,6 +111,39 @@ class CheckpointWitness:
             f.write(json.dumps(checkpoint.to_dict(), sort_keys=True) + "\n")
             f.flush()
             os.fsync(f.fileno())
+        self._persist_if_durable()
+
+    def _persist_if_durable(self) -> None:
+        """Snapshot the witness write, but only when this directory lives inside
+        the durable root.
+
+        The witness exists to detect truncation of the record ledger, so it is
+        worthless if it can be silently destroyed -- but it is ALSO worthless if
+        snapshotting it overwrites the shared state object with some other
+        directory's contents. FLIGHTRECORDER_WITNESS_DIR can point anywhere, so
+        persist only when it is genuinely under the durable root, and say so
+        loudly when it is not rather than let an operator assume it is covered.
+        """
+        from . import durable as durable_mod
+
+        if not durable_mod.is_active():
+            return
+        root = Path(durable_mod.data_root())
+        try:
+            self.dir.resolve().relative_to(root.resolve())
+        except ValueError:
+            global _WARNED_WITNESS_OUTSIDE_ROOT
+            if not _WARNED_WITNESS_OUTSIDE_ROOT:
+                _WARNED_WITNESS_OUTSIDE_ROOT = True
+                logging.getLogger("flightrecorder.checkpoint").error(
+                    "witness directory %s is outside the durable root %s: checkpoints are "
+                    "NOT being snapshotted and will be lost when this instance is recycled. "
+                    "Move it under the durable root.",
+                    self.dir,
+                    root,
+                )
+            return
+        durable_mod.persist(str(root))
 
     def read_all(self, tenant: Optional[str] = None) -> list[Checkpoint]:
         out: list[Checkpoint] = []
