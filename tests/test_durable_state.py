@@ -7,10 +7,18 @@ from __future__ import annotations
 import json
 
 import pytest
-from google.api_core.exceptions import NotFound, PreconditionFailed
 
-from flightrecorder import durable
-from flightrecorder.plans import PlanStore
+# The GCS client is an OPTIONAL extra: this package must install and run with no
+# cloud SDK present, so the test that exercises the fake-GCS path skips instead
+# of breaking collection for anyone doing a minimal install.
+_api_core = pytest.importorskip(
+    "google.api_core.exceptions", reason="google-cloud-storage extra not installed"
+)
+NotFound = _api_core.NotFound
+PreconditionFailed = _api_core.PreconditionFailed
+
+from flightrecorder import durable  # noqa: E402
+from flightrecorder.plans import PlanStore  # noqa: E402
 
 
 class FakeBlob:
