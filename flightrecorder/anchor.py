@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import rfc3161_min
+from . import durable, rfc3161_min
 
 DEFAULT_TSA_URL = os.getenv("FLIGHTRECORDER_TSA_URL", "https://freetsa.org/tsr")
 
@@ -82,9 +82,7 @@ def merkle_proof(hashes: list[str], index: int) -> list[dict[str, str]]:
     return proof
 
 
-def verify_merkle_proof(
-    leaf_hex: str, proof: list[dict[str, str]], root_hex: str
-) -> bool:
+def verify_merkle_proof(leaf_hex: str, proof: list[dict[str, str]], root_hex: str) -> bool:
     try:
         acc = _leaf(leaf_hex)
         for step in proof:
@@ -130,6 +128,8 @@ class AnchorStore:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        if durable.is_active():
+            durable.restore_once(str(self.path.parent))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.touch()
@@ -139,6 +139,8 @@ class AnchorStore:
             f.write(json.dumps(rec.to_dict(), separators=(",", ":")) + "\n")
             f.flush()
             os.fsync(f.fileno())
+        if durable.is_active():
+            durable.persist(str(self.path.parent))
 
     def read_all(self) -> list[dict[str, Any]]:
         out = []
@@ -176,9 +178,7 @@ def anchor_chain_head(
     reason = None
 
     if attempt_tsa:
-        result = rfc3161_min.request_timestamp(
-            bytes.fromhex(root), tsa_url, opener=opener
-        )
+        result = rfc3161_min.request_timestamp(bytes.fromhex(root), tsa_url, opener=opener)
         granted = bool(result.get("granted"))
         gen_time = result.get("gen_time")
         reason = result.get("reason")

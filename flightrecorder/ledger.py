@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from . import crypto
+from . import crypto, durable
 from .filelock import FileLock
 
 GENESIS = "0" * 64
@@ -50,9 +50,7 @@ DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024  # 1 MiB
 
 
 def max_payload_bytes() -> int:
-    return int(
-        os.getenv("FLIGHTRECORDER_MAX_PAYLOAD_BYTES", str(DEFAULT_MAX_PAYLOAD_BYTES))
-    )
+    return int(os.getenv("FLIGHTRECORDER_MAX_PAYLOAD_BYTES", str(DEFAULT_MAX_PAYLOAD_BYTES)))
 
 
 # Fields covered by the record hash, in a fixed order (order doesn't affect
@@ -109,6 +107,8 @@ class Ledger:
 
     def __init__(self, path: str | Path, keystore: Optional[crypto.Keystore] = None):
         self.path = Path(path)
+        if durable.is_active():
+            durable.restore_once(str(self.path.parent))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.touch()
@@ -183,6 +183,8 @@ class Ledger:
                 f.write(line + "\n")
                 f.flush()
                 os.fsync(f.fileno())
+            if durable.is_active():
+                durable.persist(str(self.path.parent))
 
         return AppendResult(seq=seq, hash=h, record=record)
 
@@ -291,9 +293,7 @@ def verify_records(
 
         sig = rec.get("sig")
         if pub is not None:
-            if not sig or not crypto.verify_sig_with_key(
-                bytes.fromhex(recomputed), sig, pub
-            ):
+            if not sig or not crypto.verify_sig_with_key(bytes.fromhex(recomputed), sig, pub):
                 return VerifyResult(
                     ok=False,
                     n_records=len(records),

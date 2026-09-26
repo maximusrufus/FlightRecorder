@@ -67,9 +67,9 @@ class PlanStore:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         if durable.is_active():
-            durable.restore_once(str(self.path))
+            durable.restore_once(str(self.path.parent))
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.write_text("{}", encoding="utf-8")
 
@@ -87,7 +87,7 @@ class PlanStore:
             os.fsync(f.fileno())
         os.replace(tmp, self.path)
         if durable.is_active():
-            durable.persist(str(self.path))
+            durable.persist(str(self.path.parent))
 
     def get_plan(self, tenant: str) -> str:
         data = self._read()

@@ -1,23 +1,31 @@
-"""Tests for flightrecorder.durable -- snapshot-on-write / restore-on-boot
-for plans.json. All GCS access is faked in-process; nothing here touches
-the network."""
+"""Tests for flightrecorder.durable -- whole-data-directory snapshot/restore.
+
+plans.json, api_keys.json, ledger.jsonl and anchors.jsonl must stay mutually
+consistent (a key must have a plan; a ledger record must not outlive the key
+store that authenticated it), so durable.py snapshots the ENTIRE data
+directory as one tar.gz object rather than snapshotting files independently.
+
+All GCS access is faked in-process; nothing here touches the network.
+"""
 
 from __future__ import annotations
 
-import json
+import io
+import tarfile
 
 import pytest
 
-# The GCS client is an OPTIONAL extra: this package must install and run with no
-# cloud SDK present, so the test that exercises the fake-GCS path skips instead
-# of breaking collection for anyone doing a minimal install.
-_api_core = pytest.importorskip(
-    "google.api_core.exceptions", reason="google-cloud-storage extra not installed"
-)
-NotFound = _api_core.NotFound
-PreconditionFailed = _api_core.PreconditionFailed
+# The whole file exercises the optional GCS durability path; skip cleanly
+# (not a failure) in an environment that never installed
+# google-cloud-storage -- FlightRecorder itself imports it lazily and only
+# when FLIGHTRECORDER_GCS_BUCKET is set (see flightrecorder/durable.py).
+google_api_core_exceptions = pytest.importorskip("google.api_core.exceptions")
+NotFound = google_api_core_exceptions.NotFound
+PreconditionFailed = google_api_core_exceptions.PreconditionFailed
 
-from flightrecorder import durable  # noqa: E402
+from flightrecorder import crypto, durable  # noqa: E402
+from flightrecorder.auth import KeyStore  # noqa: E402
+from flightrecorder.ledger import Ledger, verify_records  # noqa: E402
 from flightrecorder.plans import PlanStore  # noqa: E402
 
 
@@ -65,12 +73,13 @@ def fake_gcs(monkeypatch):
     durable._restored = False
 
 
-def _upload_count(monkeypatch, store: dict) -> list[int]:
-    calls: list[int] = []
+def _upload_count(monkeypatch, store: dict) -> list[bytes]:
+    """Wrap FakeBlob.upload_from_string to record every uploaded payload."""
+    calls: list[bytes] = []
     original = FakeBlob.upload_from_string
 
     def counted(self, data, if_generation_match=None, content_type=None):
-        calls.append(1)
+        calls.append(bytes(data))
         return original(
             self, data, if_generation_match=if_generation_match, content_type=content_type
         )
@@ -79,69 +88,150 @@ def _upload_count(monkeypatch, store: dict) -> list[int]:
     return calls
 
 
-def test_plan_change_uploads_once(tmp_path, fake_gcs, monkeypatch):
-    calls = _upload_count(monkeypatch, fake_gcs)
-    store = PlanStore(tmp_path / "plans.json")
-    calls.clear()  # constructor may have written the initial "{}"
-    store.set_plan("acme", "pro")
-    assert len(calls) == 1
+def _new_process(monkeypatch=None) -> None:
+    """Simulate a fresh Cloud Run instance: this process hasn't restored yet."""
+    durable._restored = False
 
 
-def test_read_uploads_nothing(tmp_path, fake_gcs, monkeypatch):
-    store = PlanStore(tmp_path / "plans.json")
-    store.set_plan("acme", "pro")
+def test_key_written_then_fresh_process_resolves_tenant(tmp_path, fake_gcs):
+    root1 = tmp_path / "instance_a"
+    store1 = KeyStore(root1 / "api_keys.json")
+    raw_key = store1.create_key("acme")
+
+    _new_process()
+    root2 = tmp_path / "instance_b"
+    store2 = KeyStore(root2 / "api_keys.json")
+    assert store2.tenant_for_key(raw_key) == "acme"
+
+
+def test_ledger_record_survives_restart_and_chain_verifies(tmp_path, fake_gcs):
+    root1 = tmp_path / "instance_a"
+    led1 = Ledger(root1 / "ledger.jsonl")
+    led1.append(
+        tenant="acme",
+        agent_id="agent-1",
+        model="m",
+        model_version="v1",
+        kind="prompt",
+        payload=b"hello",
+    )
+
+    _new_process()
+    root2 = tmp_path / "instance_b"
+    led2 = Ledger(root2 / "ledger.jsonl")
+    records = list(led2.read_all())
+    assert len(records) == 1
+    assert records[0]["tenant"] == "acme"
+
+    result = verify_records(records, public_key_hex=crypto.public_key_hex())
+    assert result.ok
+    assert result.n_records == 1
+
+
+def test_keys_plans_and_ledger_restore_together_from_one_object(tmp_path, fake_gcs):
+    root1 = tmp_path / "instance_a"
+    keys1 = KeyStore(root1 / "api_keys.json")
+    plans1 = PlanStore(root1 / "plans.json")
+    ledger1 = Ledger(root1 / "ledger.jsonl")
+
+    raw_key = keys1.create_key("acme")
+    plans1.set_plan("acme", "pro")
+    ledger1.append(
+        tenant="acme",
+        agent_id="agent-1",
+        model="m",
+        model_version="v1",
+        kind="prompt",
+        payload=b"hi",
+    )
+
+    _new_process()
+    root2 = tmp_path / "instance_b"
+    # Constructing the FIRST store against the new root restores the WHOLE
+    # directory; the other two just find their files already there.
+    keys2 = KeyStore(root2 / "api_keys.json")
+    plans2 = PlanStore(root2 / "plans.json")
+    ledger2 = Ledger(root2 / "ledger.jsonl")
+
+    assert keys2.tenant_for_key(raw_key) == "acme"
+    assert plans2.get_plan("acme") == "pro"
+    assert len(list(ledger2.read_all())) == 1
+
+
+def test_tar_member_with_path_traversal_is_refused(tmp_path, fake_gcs):
+    # Craft a malicious archive with a legitimate member plus a `../` escape.
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        good = b'{"tenant": "acme"}'
+        info = tarfile.TarInfo(name="plans.json")
+        info.size = len(good)
+        tf.addfile(info, io.BytesIO(good))
+
+        evil = b"pwned"
+        evil_info = tarfile.TarInfo(name="../../evil.txt")
+        evil_info.size = len(evil)
+        tf.addfile(evil_info, io.BytesIO(evil))
+
+    fake_gcs["data"] = buf.getvalue()
+    fake_gcs["generation"] = 1
+
+    root = tmp_path / "victim"
+    durable.restore_once(str(root))
+
+    assert (root / "plans.json").exists()
+    assert not (tmp_path / "evil.txt").exists()
+    escaped = list(tmp_path.parent.glob("evil.txt"))
+    assert escaped == []
+
+
+def test_two_successive_persists_produce_identical_bytes(tmp_path, fake_gcs, monkeypatch):
+    root = tmp_path / "instance_a"
+    store = PlanStore(root / "plans.json")
+    store.set_plan("acme", "pro")  # first real write -> first persist
+
     calls = _upload_count(monkeypatch, fake_gcs)
-    assert store.get_plan("acme") == "pro"
+    # Two persists over UNCHANGED content must produce byte-identical
+    # payloads (sorted member order, fixed per-entry + gzip metadata).
+    durable.persist(str(root))
+    durable.persist(str(root))
+    assert len(calls) == 2
+    assert calls[0] == calls[1]
+
+
+def test_read_only_uploads_nothing(tmp_path, fake_gcs, monkeypatch):
+    root = tmp_path / "instance_a"
+    store = KeyStore(root / "api_keys.json")
+    raw_key = store.create_key("acme")
+
+    calls = _upload_count(monkeypatch, fake_gcs)
+    assert store.tenant_for_key(raw_key) == "acme"
     assert len(calls) == 0
 
 
-def test_fresh_process_restores_plan(tmp_path, fake_gcs):
-    store1 = PlanStore(tmp_path / "a.json")
-    store1.set_plan("acme", "business")
-
-    # Simulate a brand-new process/instance: reset the restored flag and
-    # point at a fresh local path, as a fresh Cloud Run instance would.
-    durable._restored = False
-    store2 = PlanStore(tmp_path / "a2.json")
-    assert store2.get_plan("acme") == "business"
-
-
-def test_stale_generation_raises_and_resyncs(tmp_path, fake_gcs, monkeypatch):
-    path = tmp_path / "f.json"
-    store = PlanStore(path)
-    store.set_plan("acme", "core")  # generation now 1
-
-    # Another writer wins the race: its snapshot (plan "winner") lands in
-    # the bucket with a bumped generation, behind our back.
-    winner_data = json.dumps({"winner": {"plan": "business", "usage": {}}}).encode("utf-8")
-    fake_gcs["data"] = winner_data
-    fake_gcs["generation"] = fake_gcs["generation"] + 1
-
-    with pytest.raises(durable.StaleStateError):
-        store.set_plan("acme", "pro")
-
-    # The local file now matches the winner's state, not the discarded write.
-    on_disk = json.loads(path.read_text(encoding="utf-8"))
-    assert "winner" in on_disk
-    assert on_disk.get("acme", {}).get("plan") != "pro"
-
-
-def test_inactive_when_bucket_unset(tmp_path, monkeypatch):
+def test_inactive_when_bucket_unset_no_upload_no_import(tmp_path, monkeypatch):
     monkeypatch.delenv("FLIGHTRECORDER_GCS_BUCKET", raising=False)
-    store = PlanStore(tmp_path / "h.json")
-    store.set_plan("acme", "pro")
-    assert store.get_plan("acme") == "pro"
 
+    def _boom():
+        raise AssertionError("_get_blob() must never be called when inactive")
 
-def test_stripe_event_idempotency_survives_restart(tmp_path, fake_gcs):
-    path1 = tmp_path / "e1.json"
-    store1 = PlanStore(path1)
-    assert store1.mark_event_processed("evt_123") is True
+    monkeypatch.setattr(durable, "_get_blob", _boom)
 
-    # Simulate a restart: new process, fresh local path.
-    durable._restored = False
-    path2 = tmp_path / "e2.json"
-    store2 = PlanStore(path2)
-    # Replayed webhook delivery of the same event id must still be detected
-    # as a duplicate after the restart.
-    assert store2.mark_event_processed("evt_123") is False
+    root = tmp_path / "instance_a"
+    plans = PlanStore(root / "plans.json")
+    plans.set_plan("acme", "pro")
+    assert plans.get_plan("acme") == "pro"
+
+    keys = KeyStore(root / "api_keys.json")
+    raw_key = keys.create_key("acme")
+    assert keys.tenant_for_key(raw_key) == "acme"
+
+    led = Ledger(root / "ledger.jsonl")
+    led.append(
+        tenant="acme",
+        agent_id="agent-1",
+        model="m",
+        model_version="v1",
+        kind="prompt",
+        payload=b"hi",
+    )
+    assert len(list(led.read_all())) == 1

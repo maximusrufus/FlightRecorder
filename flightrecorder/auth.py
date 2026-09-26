@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from flightrecorder import durable
 from flightrecorder.filelock import FileLock
 
 KEY_PREFIX = "fr_live_"
@@ -34,6 +35,8 @@ class KeyStore:
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        if durable.is_active():
+            durable.restore_once(str(self.path.parent))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self.path.write_text("{}", encoding="utf-8")
@@ -51,6 +54,8 @@ class KeyStore:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, self.path)
+        if durable.is_active():
+            durable.persist(str(self.path.parent))
 
     def create_key(self, tenant: str) -> str:
         raw_key = generate_raw_key()

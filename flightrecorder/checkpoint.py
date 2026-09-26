@@ -110,11 +110,7 @@ class CheckpointWitness:
 
     def read_all(self, tenant: Optional[str] = None) -> list[Checkpoint]:
         out: list[Checkpoint] = []
-        paths = (
-            [self._path_for(tenant)]
-            if tenant
-            else list(self.dir.glob("*.checkpoints.jsonl"))
-        )
+        paths = [self._path_for(tenant)] if tenant else list(self.dir.glob("*.checkpoints.jsonl"))
         for p in paths:
             if not p.exists():
                 continue
