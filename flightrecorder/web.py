@@ -132,3 +132,13 @@ def compare_bifrost(request: Request) -> HTMLResponse:
 @router.get("/migrate/from-langfuse", response_class=HTMLResponse)
 def migrate_from_langfuse(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "migrate.html", {})
+
+
+@router.get("/billing/success", response_class=HTMLResponse)
+def billing_success(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "billing_success.html", {})
+
+
+@router.get("/billing/cancel", response_class=HTMLResponse)
+def billing_cancel(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "billing_cancel.html", {})
