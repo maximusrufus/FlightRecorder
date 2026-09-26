@@ -14,6 +14,21 @@
   EU AI Act Article 12, ISO/IEC 42001, FINRA Rule 17a-4(f), and SOC 2 CC7.
 </p>
 
+<h2>Get started</h2>
+<p><strong>Run it yourself, free:</strong></p>
+<pre><code>pip install -e .
+export FLIGHTRECORDER_DEV=1   # local trial only; production needs a real key-encryption-key</code></pre>
+<p>
+  Then, in Python: <code>from flightrecorder import Recorder</code>, create a
+  <code>Recorder()</code>, and call <code>.record(...)</code> — writes to a local
+  ledger file, no network required. Full source and docs on
+  <a href="https://github.com/maximusrufus/FlightRecorder">GitHub</a>, Apache-2.0.
+</p>
+<p><strong>Or have us host it:</strong> email
+  <a href="mailto:support@ripplarity.com?subject=Flight%20Recorder%20hosted%20setup">support@ripplarity.com</a>
+  with which tier you want, and we'll set up a hosted workspace for you.
+</p>
+
 <h2>Pricing</h2>
 <table>
   <tr><th>Plan</th><th>Price</th><th>Limit</th></tr>

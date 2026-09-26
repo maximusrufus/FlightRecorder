@@ -25,3 +25,10 @@ def test_preview_banner_hidden_when_disabled(monkeypatch):
     resp = client.get("/")
     assert resp.status_code == 200
     assert 'data-testid="preview-banner"' not in resp.text
+
+
+def test_landing_page_has_working_contact_route():
+    client = TestClient(app_mod.app)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "mailto:support@ripplarity.com" in resp.text
