@@ -31,6 +31,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from . import durable as durable_mod
 from . import plans as plans_mod
 
 router = APIRouter()
@@ -228,38 +229,44 @@ async def stripe_webhook(
     event = _verify_stripe_signature(payload, stripe_signature)
 
     store = _plans_store()
-    event_id = event.get("id") or ""
-    event_type = event.get("type", "")
-    if event_id and not store.mark_event_processed(event_id):
-        return {"received": True, "duplicate": True}
+    try:
+        event_id = event.get("id") or ""
+        event_type = event.get("type", "")
+        if event_id and not store.mark_event_processed(event_id):
+            return {"received": True, "duplicate": True}
 
-    obj = event.get("data", {}).get("object", {})
+        obj = event.get("data", {}).get("object", {})
 
-    if event_type in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
-        if obj.get("payment_status") != "unpaid":
-            _fulfill_checkout_session(store, obj)
-    elif event_type in (
-        "customer.subscription.created",
-        "customer.subscription.updated",
-        "customer.subscription.deleted",
-    ):
-        _handle_subscription_event(store, event_type, obj)
-    elif event_type == "invoice.paid":
-        subscription_id = obj.get("subscription")
-        if subscription_id:
-            _handle_subscription_event(
-                store,
-                event_type,
-                {"customer": obj.get("customer"), "id": subscription_id, "status": "active"},
-            )
-    elif event_type == "invoice.payment_failed":
-        subscription_id = obj.get("subscription")
-        if subscription_id:
-            _handle_subscription_event(
-                store,
-                event_type,
-                {"customer": obj.get("customer"), "id": subscription_id, "status": "past_due"},
-            )
+        if event_type in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+            if obj.get("payment_status") != "unpaid":
+                _fulfill_checkout_session(store, obj)
+        elif event_type in (
+            "customer.subscription.created",
+            "customer.subscription.updated",
+            "customer.subscription.deleted",
+        ):
+            _handle_subscription_event(store, event_type, obj)
+        elif event_type == "invoice.paid":
+            subscription_id = obj.get("subscription")
+            if subscription_id:
+                _handle_subscription_event(
+                    store,
+                    event_type,
+                    {"customer": obj.get("customer"), "id": subscription_id, "status": "active"},
+                )
+        elif event_type == "invoice.payment_failed":
+            subscription_id = obj.get("subscription")
+            if subscription_id:
+                _handle_subscription_event(
+                    store,
+                    event_type,
+                    {"customer": obj.get("customer"), "id": subscription_id, "status": "past_due"},
+                )
+    except durable_mod.StaleStateError as exc:
+        # Lost the GCS compare-and-swap race against an overlapping revision.
+        # Return 503 so Stripe retries the delivery against the now-resynced
+        # local state instead of silently dropping this event.
+        raise HTTPException(503, "plan state resynced, please retry") from exc
 
     return {"received": True}
 

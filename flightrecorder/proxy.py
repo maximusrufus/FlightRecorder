@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field
 from . import anchor as anchor_mod
 from . import checkpoint as checkpoint_mod
 from . import crypto
+from . import durable as durable_mod
 from . import ledger as ledger_mod
 from . import mapping as mapping_mod
 from . import plans as plans_mod
@@ -140,6 +141,8 @@ def _check_plan_limit(tenant: str, n: int = 1) -> None:
         get_plan_store().check_and_increment(tenant, n)
     except plans_mod.PlanLimitExceeded as exc:
         raise HTTPException(429, str(exc)) from exc
+    except durable_mod.StaleStateError as exc:
+        raise HTTPException(503, "plan state resynced, please retry") from exc
 
 
 def _emit_checkpoint(tenant: str, result: ledger_mod.AppendResult) -> None:

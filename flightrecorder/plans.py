@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from . import durable
 from .filelock import FileLock
 
 PLAN_LIMITS = {
@@ -67,6 +68,8 @@ class PlanStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if durable.is_active():
+            durable.restore_once(str(self.path))
         if not self.path.exists():
             self.path.write_text("{}", encoding="utf-8")
 
@@ -83,6 +86,8 @@ class PlanStore:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, self.path)
+        if durable.is_active():
+            durable.persist(str(self.path))
 
     def get_plan(self, tenant: str) -> str:
         data = self._read()
